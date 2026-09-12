@@ -3,12 +3,15 @@ import { projects, certificates, settings } from "@/db/schema";
 import { asc, desc } from "drizzle-orm";
 import { DRIVE_CATEGORIES, driveFileUrl, driveThumbnailUrl } from "./drive";
 
+export type Project = typeof projects.$inferSelect;
+export type Certificate = typeof certificates.$inferSelect;
+
 export const DEFAULT_SETTINGS: Record<string, string> = {
   name: "تامر مستريحي",
   nameEn: "Tamer Mistareehi",
   title: "مهندس ومصمم ذكاء اصطناعي توليدي",
   titleEn: "Generative AI Engineer & Designer",
-  avatar: "/images/avatar.jpg",
+  avatar: "/images/avatar.svg",
   bio: "أعمل عند نقطة التقاء الهندسة والفن؛ أبني أنظمة ذكاء اصطناعي توليدي (LLMs، Diffusion Models، Agents) وأصمم تجارب بصرية وتفاعلية تُترجم قدرات هذه النماذج إلى منتجات حقيقية. شغفي هو تحويل الأفكار المعقّدة إلى حلول ذكية وجميلة وقابلة للاستخدام.",
   email: "tamermistareehi@gmail.com",
   location: "Middle East · Remote",
@@ -36,7 +39,7 @@ function makeDriveProject(item: DriveSeed) {
     title: item.title,
     description: item.description,
     category: item.category,
-    imageUrl: isVisual ? driveThumbnailUrl(item.id) : item.cover || "/images/p6.jpg",
+    imageUrl: isVisual ? driveThumbnailUrl(item.id) : item.cover || "/images/p6.svg",
     fileType: item.fileType,
     fileName: item.fileName,
     link: driveFileUrl(item.id),
@@ -268,7 +271,7 @@ const SEED_PROJECTS = [
     order: 1,
     description: "قطعة صوتية من أرشيف التجارب الصوتية التوليدية.",
     tags: "Audio,Sound Design,MP3",
-    cover: "/images/p6.jpg",
+    cover: "/images/p6.svg",
     featured: true,
   }),
 
@@ -282,7 +285,7 @@ const SEED_PROJECTS = [
     order: 1,
     description: "عرض تقديمي عن أدوات الذكاء الاصطناعي للابتكار والإبداع.",
     tags: "AI,Presentation,Innovation",
-    cover: "/images/p5.jpg",
+    cover: "/images/p5.svg",
     featured: true,
   }),
 ];
@@ -296,10 +299,28 @@ const SEED_CERTS = [
   { title: "Machine Learning Engineering for Production (MLOps)", issuer: "DeepLearning.AI", year: "2023", sortOrder: 6 },
 ];
 
+const FALLBACK_PROJECTS: Project[] = SEED_PROJECTS.map((project, index) => ({
+  ...project,
+  id: index + 1,
+  link: project.link,
+  fileName: project.fileName,
+  createdAt: new Date(0),
+}));
+
+const FALLBACK_CERTS: Certificate[] = SEED_CERTS.map((cert, index) => ({
+  ...cert,
+  id: index + 1,
+  link: null,
+  imageUrl: null,
+  createdAt: new Date(0),
+}));
+
 let seeded = false;
 let seeding: Promise<void> | null = null;
+const hasDatabase = Boolean(process.env.DATABASE_URL);
 
 export function ensureSeeded(): Promise<void> {
+  if (!hasDatabase) return Promise.resolve();
   if (seeded) return Promise.resolve();
   if (!seeding) {
     seeding = runSeed().finally(() => {
@@ -332,21 +353,39 @@ async function runSeed() {
 }
 
 export async function getProjects() {
-  await ensureSeeded();
-  return db.select().from(projects).orderBy(asc(projects.category), asc(projects.sortOrder), desc(projects.createdAt));
+  if (!hasDatabase) return FALLBACK_PROJECTS;
+  try {
+    await ensureSeeded();
+    return await db.select().from(projects).orderBy(asc(projects.category), asc(projects.sortOrder), desc(projects.createdAt));
+  } catch (error) {
+    console.error("database unavailable; using seed projects", error);
+    return FALLBACK_PROJECTS;
+  }
 }
 
 export async function getCertificates() {
-  await ensureSeeded();
-  return db.select().from(certificates).orderBy(asc(certificates.sortOrder), desc(certificates.createdAt));
+  if (!hasDatabase) return FALLBACK_CERTS;
+  try {
+    await ensureSeeded();
+    return await db.select().from(certificates).orderBy(asc(certificates.sortOrder), desc(certificates.createdAt));
+  } catch (error) {
+    console.error("database unavailable; using seed certificates", error);
+    return FALLBACK_CERTS;
+  }
 }
 
 export async function getSettings(): Promise<Record<string, string>> {
-  await ensureSeeded();
-  const rows = await db.select().from(settings);
-  const out = { ...DEFAULT_SETTINGS };
-  for (const r of rows) out[r.key] = r.value;
-  return out;
+  if (!hasDatabase) return DEFAULT_SETTINGS;
+  try {
+    await ensureSeeded();
+    const rows = await db.select().from(settings);
+    const out = { ...DEFAULT_SETTINGS };
+    for (const r of rows) out[r.key] = r.value;
+    return out;
+  } catch (error) {
+    console.error("database unavailable; using default settings", error);
+    return DEFAULT_SETTINGS;
+  }
 }
 
 export async function setSetting(key: string, value: string) {
@@ -356,6 +395,4 @@ export async function setSetting(key: string, value: string) {
     .onConflictDoUpdate({ target: settings.key, set: { value } });
 }
 
-export type Project = typeof projects.$inferSelect;
-export type Certificate = typeof certificates.$inferSelect;
 export { DRIVE_CATEGORIES };

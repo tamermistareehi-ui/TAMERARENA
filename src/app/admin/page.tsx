@@ -233,7 +233,7 @@ function ProjectsTab({ projects, reload, notify }: { projects: Project[]; reload
                 try {
                   const url = await upload(f);
                   const fileType = f.type.startsWith("video/") ? "video" : f.type.startsWith("audio/") ? "audio" : f.type.includes("presentation") || f.name.endsWith(".ppt") || f.name.endsWith(".pptx") || f.type === "application/pdf" ? "presentation" : "image";
-                  setForm((p) => ({ ...p, imageUrl: fileType === "image" || fileType === "video" ? url : "/images/p5.jpg", link: url, fileName: f.name, fileType }));
+                  setForm((p) => ({ ...p, imageUrl: fileType === "image" || fileType === "video" ? url : "/images/p5.svg", link: url, fileName: f.name, fileType }));
                 } finally {
                   setBusy(false);
                 }
